@@ -36,44 +36,20 @@ import static org.junit.Assert.assertNotNull;
 
 public class SparkDataCollectionTest {
 
-    private static ReplayListenerBus replayBus;
-    private static ApplicationEventListener applicationEventListener;
-    private static JobProgressListener jobProgressListener;
-    private static EnvironmentListener environmentListener;
-    private static StorageStatusListener storageStatusListener;
-    private static ExecutorsListener executorsListener;
-    private static StorageListener storageListener;
-    private static StorageStatusTrackingListener storageStatusTrackingListener;
-    private static SparkDataCollection dataCollection;
-
-    @BeforeClass
-    public static void runBeforeClass() {
-        replayBus = new ReplayListenerBus();
-        applicationEventListener = new ApplicationEventListener();
-        jobProgressListener = new JobProgressListener(new SparkConf());
-        environmentListener = new EnvironmentListener();
-        storageStatusListener = new StorageStatusListener();
-        executorsListener = new ExecutorsListener(storageStatusListener);
-        storageListener = new StorageListener(storageStatusListener);
-        storageStatusTrackingListener = new StorageStatusTrackingListener();
-        replayBus.addListener(storageStatusTrackingListener);
-
-        dataCollection = new SparkDataCollection(applicationEventListener,
-                jobProgressListener, storageStatusListener, environmentListener,
-                executorsListener, storageListener, storageStatusTrackingListener);
-
-        replayBus.addListener(applicationEventListener);
-        replayBus.addListener(jobProgressListener);
-        replayBus.addListener(environmentListener);
-        replayBus.addListener(storageStatusListener);
-        replayBus.addListener(executorsListener);
-        replayBus.addListener(storageListener);
-    }
+    private static final String event_log_dir = "spark_event_logs/";
 
     @Test
     public void testCollectJobProgressData() {
-        InputStream in = new BufferedInputStream(SparkDataCollectionTest.class.getClassLoader().getResourceAsStream(
-                "spark_event_logs/event_log_1"));
+        ReplayListenerBus replayBus = new ReplayListenerBus();
+        JobProgressListener jobProgressListener = new JobProgressListener(new SparkConf());
+
+        replayBus.addListener(jobProgressListener);
+
+        SparkDataCollection dataCollection = new SparkDataCollection(null, jobProgressListener,
+                null, null, null, null, null);
+
+        InputStream in = new BufferedInputStream(
+                SparkDataCollectionTest.class.getClassLoader().getResourceAsStream(event_log_dir + "event_log_1"));
         replayBus.replay(in, in.toString(), false);
 
         SparkJobProgressData jobProgressData = dataCollection.getJobProgressData();
