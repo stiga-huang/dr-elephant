@@ -64,6 +64,7 @@ object Dependencies {
     "commons-io" % "commons-io" % commonsIoVersion,
     "mysql" % "mysql-connector-java" % mysqlConnectorVersion,
     "org.apache.hadoop" % "hadoop-auth" % hadoopVersion % "compileonly",
+    "org.apache.hadoop" % "hadoop-mapreduce-client-core" % hadoopVersion % "compileonly",
     "org.apache.hadoop" % "hadoop-common" % hadoopVersion % "compileonly",
     "org.apache.hadoop" % "hadoop-common" % hadoopVersion % Test,
     "org.apache.hadoop" % "hadoop-hdfs" % hadoopVersion % "compileonly",
