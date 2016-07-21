@@ -37,10 +37,14 @@ project_root=$script_dir/../
 # User could set an environmental variable, ELEPHANT_CONF_DIR, or pass an optional argument(config file path)
 if [ -z "$1" ]; then
   if [ -z "$ELEPHANT_CONF_DIR" ]; then
-      echo "error: Couldn't find the configuration directory."
-      echo "Please set env variable ELEPHANT_CONF_DIR to the configuration directory or pass the location as an argument."
-      print_usage
-      exit 1
+      if [ -d "${project_root}/app-conf" ]; then
+          ELEPHANT_CONF_DIR=$project_root/app-conf
+      else
+         echo "error: Couldn't find the configuration directory."
+         echo "Please set env variable ELEPHANT_CONF_DIR to the configuration directory or pass the location as an argument."
+         print_usage
+         exit 1
+      fi
   fi
   CONF_DIR="$ELEPHANT_CONF_DIR"
 else
@@ -109,6 +113,11 @@ fi
 
 if [ -n "${application_secret}" ]; then
   OPTS+=" -Dapplication.secret=$application_secret"
+fi
+
+# Enable web analytics if configured
+if [ -n "${enable_analytics}" ]; then
+  OPTS+=" -Denable.analytics=$enable_analytics"
 fi
 
 # Navigate to project root

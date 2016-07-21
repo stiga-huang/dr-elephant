@@ -288,6 +288,45 @@ public class RestAPITest {
     });
   }
 
+  /**
+   * <p>
+   *   Rest API - Provides data for plotting the job history graph for time and resources
+   * </p>
+   */
+  public void testrestJobMetricsGraphData() {
+    running(testServer(TEST_SERVER_PORT, fakeApp), new Runnable() {
+      public void run() {
+        populateTestData();
+        final WS.Response response = WS.url(BASE_URL + REST_JOB_METRICS_GRAPH_DATA_PATH).
+                setQueryParameter("id", TEST_JOB_DEF_ID1).
+                get().get(RESPONSE_TIMEOUT, TimeUnit.MILLISECONDS);
+        List<String> jobList = response.asJson().findValuesAsText("stageid");
+        assertTrue("Job id 1 missing in list", jobList.contains(TEST_JOB_ID1));
+        assertTrue("Job id 2 missing in list", jobList.contains(TEST_JOB_ID2));
+      }
+    });
+  }
+
+  /**
+   * <p>
+   * Rest API  - Provides data for plotting the flow history graph for time and resources
+   * </p>
+   */
+  @Test
+  public void testrestFlowMetricsGraphData() {
+    running(testServer(TEST_SERVER_PORT, fakeApp), new Runnable() {
+      public void run() {
+        populateTestData();
+        final WS.Response response = WS.url(BASE_URL + REST_FLOW_METRICS_GRAPH_DATA_PATH).
+                setQueryParameter("id", TEST_FLOW_DEF_ID1).
+                get().get(RESPONSE_TIMEOUT, TimeUnit.MILLISECONDS);
+        List<String> jobList = response.asJson().findValuesAsText("jobexecurl");
+        assertTrue("Job exec url1 missing in list", jobList.contains(TEST_JOB_EXEC_ID1));
+        assertTrue("Job exec url2 missing in list", jobList.contains(TEST_JOB_EXEC_ID2));
+      }
+    });
+  }
+
   private void populateTestData() {
     try {
       initDB();

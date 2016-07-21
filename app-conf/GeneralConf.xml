@@ -32,4 +32,9 @@
     <value>60000</value>
     <description>Interval between retries in milliseconds</description>
   </property>
+  <property>
+    <name>drelephant.application.search.match.partial</name>
+    <value>true</value>
+    <description>If this property is "false", search will only make exact matches</description>
+  </property>
 </configuration>

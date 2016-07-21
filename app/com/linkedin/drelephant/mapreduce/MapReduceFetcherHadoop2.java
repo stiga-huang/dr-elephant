@@ -53,6 +53,7 @@ import org.codehaus.jackson.map.ObjectMapper;
 public class MapReduceFetcherHadoop2 implements ElephantFetcher<MapReduceApplicationData> {
   private static final Logger logger = Logger.getLogger(ElephantFetcher.class);
   private static final int MAX_SAMPLE_SIZE = 200;
+  private static final String SAMPLING_ENABLED = "sampling_enabled";
   // We provide one minute job fetch delay due to the job sending lag from AM/NM to JobHistoryServer HDFS
 
   private URLFactory _urlFactory;
@@ -89,6 +90,11 @@ public class MapReduceFetcherHadoop2 implements ElephantFetcher<MapReduceApplica
 
       URL jobURL = _urlFactory.getJobURL(jobId);
       String state = _jsonFactory.getState(jobURL);
+
+      jobData.setSubmitTime(_jsonFactory.getSubmitTime(jobURL));
+      jobData.setStartTime(_jsonFactory.getStartTime(jobURL));
+      jobData.setFinishTime(_jsonFactory.getFinishTime(jobURL));
+
       if (state.equals("SUCCEEDED")) {
 
         jobData.setSucceeded(true);
@@ -198,6 +204,22 @@ public class MapReduceFetcherHadoop2 implements ElephantFetcher<MapReduceApplica
   }
 
   private class JSONFactory {
+
+    private long getStartTime(URL url) throws IOException, AuthenticationException {
+      JsonNode rootNode = ThreadContextMR2.readJsonNode(url);
+      return rootNode.path("job").path("startTime").getValueAsLong();
+    }
+
+    private long getFinishTime(URL url) throws IOException, AuthenticationException {
+      JsonNode rootNode = ThreadContextMR2.readJsonNode(url);
+      return rootNode.path("job").path("finishTime").getValueAsLong();
+    }
+
+    private long getSubmitTime(URL url) throws IOException, AuthenticationException {
+      JsonNode rootNode = ThreadContextMR2.readJsonNode(url);
+      return rootNode.path("job").path("submitTime").getValueAsLong();
+    }
+
     private String getState(URL url) throws IOException, AuthenticationException {
       JsonNode rootNode = ThreadContextMR2.readJsonNode(url);
       return rootNode.path("job").path("state").getValueAsText();
@@ -268,11 +290,11 @@ public class MapReduceFetcherHadoop2 implements ElephantFetcher<MapReduceApplica
       long[] time;
       if (isMapper) {
         // No shuffle sore time in Mapper
-        time = new long[] { finishTime - startTime, 0, 0 };
+        time = new long[] { finishTime - startTime, 0, 0 ,startTime, finishTime};
       } else {
         long shuffleTime = taskAttempt.get("elapsedShuffleTime").getLongValue();
         long sortTime = taskAttempt.get("elapsedMergeTime").getLongValue();
-        time = new long[] { finishTime - startTime, shuffleTime, sortTime };
+        time = new long[] { finishTime - startTime, shuffleTime, sortTime, startTime, finishTime };
       }
 
       return time;
@@ -306,12 +328,18 @@ public class MapReduceFetcherHadoop2 implements ElephantFetcher<MapReduceApplica
     }
 
     private void getTaskData(String jobId, List<MapReduceTaskData> taskList) throws IOException, AuthenticationException {
-      if (taskList.size() > MAX_SAMPLE_SIZE) {
-        logger.info(jobId + " needs sampling.");
-        Collections.shuffle(taskList);
+
+      int sampleSize = taskList.size();
+
+      // check if sampling is enabled
+      if(Boolean.parseBoolean(_fetcherConfigurationData.getParamMap().get(SAMPLING_ENABLED))) {
+        if (taskList.size() > MAX_SAMPLE_SIZE) {
+          logger.info(jobId + " needs sampling.");
+          Collections.shuffle(taskList);
+        }
+        sampleSize = Math.min(taskList.size(), MAX_SAMPLE_SIZE);
       }
 
-      int sampleSize = Math.min(taskList.size(), MAX_SAMPLE_SIZE);
 
       for(int i=0; i < sampleSize; i++) {
         MapReduceTaskData data = taskList.get(i);

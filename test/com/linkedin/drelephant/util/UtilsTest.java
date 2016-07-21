@@ -162,4 +162,47 @@ public class UtilsTest {
     assertEquals(defaultValue, Utils.getNonNegativeLong(conf, "foo6", defaultValue));
     assertEquals(defaultValue, Utils.getNonNegativeLong(conf, "foo7", defaultValue));
   }
+
+  @Test
+  public void testFormatStringOrNull() {
+    assertEquals("Hello world!", Utils.formatStringOrNull("%s %s!", "Hello", "world"));
+    assertEquals(null, Utils.formatStringOrNull("%s %s!", "Hello", null));
+  }
+ 
+  @Test 
+  public void testGetDurationBreakdown() {
+    long []durations = {13423,432344,23423562,23,324252,1132141414141L};
+    assertEquals("0:00:13", Utils.getDurationBreakdown(durations[0]));
+    assertEquals("0:07:12", Utils.getDurationBreakdown(durations[1]));
+    assertEquals("6:30:23", Utils.getDurationBreakdown(durations[2]));
+    assertEquals("0:00:00", Utils.getDurationBreakdown(durations[3]));
+    assertEquals("0:05:24", Utils.getDurationBreakdown(durations[4]));
+    assertEquals("314483:43:34", Utils.getDurationBreakdown(durations[5]));
+  }
+  @Test
+  public void testGetPercentage() {
+    long []numerators = {10,20,30,40,50};
+    long []denominators = {100,200,100,52,70};
+
+    assertEquals("10.00 %", Utils.getPercentage(numerators[0],denominators[0]));
+    assertEquals("10.00 %", Utils.getPercentage(numerators[1],denominators[1]));
+    assertEquals("30.00 %", Utils.getPercentage(numerators[2],denominators[2]));
+    assertEquals("76.92 %", Utils.getPercentage(numerators[3],denominators[3]));
+    assertEquals("71.43 %", Utils.getPercentage(numerators[4],denominators[4]));
+    assertEquals("NaN", Utils.getPercentage(0,0));
+  }
+
+  @Test
+  public void testGetDurationInGBHours() {
+
+    long []durations = {10000, 213234343, 23424, 635322, 213};
+
+    assertEquals("0.003 GB Hours", Utils.getDurationInGBHours(durations[0]));
+    assertEquals("57.844 GB Hours", Utils.getDurationInGBHours(durations[1]));
+    assertEquals("0.006 GB Hours", Utils.getDurationInGBHours(durations[2]));
+    assertEquals("0.172 GB Hours", Utils.getDurationInGBHours(durations[3]));
+    assertEquals("0 GB Hours", Utils.getDurationInGBHours(durations[4]));
+
+  }
+
 }

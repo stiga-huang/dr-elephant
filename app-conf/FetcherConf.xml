@@ -32,8 +32,21 @@
   <fetcher>
     <applicationtype>mapreduce</applicationtype>
     <classname>com.linkedin.drelephant.mapreduce.MapReduceFetcherHadoop2</classname>
-    <!-- If encounter performance issues, try to use fetcher below -->
-    <!--classname>com.linkedin.drelephant.mapreduce.MapReduceFSFetcherHadoop2</classname-->
+    <params>
+      <sampling_enabled>false</sampling_enabled>
+    </params>
+    <!--
+      This is an experimental replacement for the MapReduceFetcherHadoop2 that attempts to burn
+      through queues of jobs faster by pulling data directly from HDFS rather than going through the
+      job history server.
+    -->
+    <!--<classname>com.linkedin.drelephant.mapreduce.MapReduceFSFetcherHadoop2</classname>
+    <params>
+      <sampling_enabled>false</sampling_enabled>
+    </params>-->
+    <params>
+      <sampling_enabled>false</sampling_enabled>
+    </params>
   </fetcher>
   <fetcher>
     <applicationtype>spark</applicationtype>

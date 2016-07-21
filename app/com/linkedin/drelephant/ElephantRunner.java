@@ -16,6 +16,8 @@
 
 package com.linkedin.drelephant;
 
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
+
 import com.linkedin.drelephant.analysis.AnalyticJob;
 import com.linkedin.drelephant.analysis.AnalyticJobGenerator;
 import com.linkedin.drelephant.analysis.HDFSContext;
@@ -48,9 +50,8 @@ public class ElephantRunner implements Runnable {
 
   private static final long FETCH_INTERVAL = 60 * 1000;     // Interval between fetches
   private static final long RETRY_INTERVAL = 60 * 1000;     // Interval between retries
-  private static final int EXECUTOR_NUM = 3;                // The number of executor threads to analyse the jobs
+  private static final int EXECUTOR_NUM = 5;                // The number of executor threads to analyse the jobs
 
-  private static final String GENERAL_CONF = "GeneralConf.xml";
   private static final String FETCH_INTERVAL_KEY = "drelephant.analysis.fetch.interval";
   private static final String RETRY_INTERVAL_KEY = "drelephant.analysis.retry.interval";
   private static final String EXECUTOR_NUM_KEY = "drelephant.analysis.thread.count";
@@ -64,17 +65,13 @@ public class ElephantRunner implements Runnable {
   private ExecutorService _service;
   private BlockingQueue<AnalyticJob> _jobQueue;
   private AnalyticJobGenerator _analyticJobGenerator;
-  private Configuration _configuration;
 
   private void loadGeneralConfiguration() {
-    logger.info("Loading configuration file " + GENERAL_CONF);
+    Configuration configuration = ElephantContext.instance().getGeneralConf();
 
-    _configuration = new Configuration();
-    _configuration.addResource(this.getClass().getClassLoader().getResourceAsStream(GENERAL_CONF));
-
-    _executorNum = Utils.getNonNegativeInt(_configuration, EXECUTOR_NUM_KEY, EXECUTOR_NUM);
-    _fetchInterval = Utils.getNonNegativeLong(_configuration, FETCH_INTERVAL_KEY, FETCH_INTERVAL);
-    _retryInterval = Utils.getNonNegativeLong(_configuration, RETRY_INTERVAL_KEY, RETRY_INTERVAL);
+    _executorNum = Utils.getNonNegativeInt(configuration, EXECUTOR_NUM_KEY, EXECUTOR_NUM);
+    _fetchInterval = Utils.getNonNegativeLong(configuration, FETCH_INTERVAL_KEY, FETCH_INTERVAL);
+    _retryInterval = Utils.getNonNegativeLong(configuration, RETRY_INTERVAL_KEY, RETRY_INTERVAL);
   }
 
   private void loadAnalyticJobGenerator() {
@@ -85,7 +82,7 @@ public class ElephantRunner implements Runnable {
     }
 
     try {
-      _analyticJobGenerator.configure(_configuration);
+      _analyticJobGenerator.configure(ElephantContext.instance().getGeneralConf());
     } catch (Exception e) {
       logger.error("Error occurred when configuring the analysis provider.", e);
       throw new RuntimeException(e);
@@ -108,9 +105,10 @@ public class ElephantRunner implements Runnable {
           _jobQueue = new LinkedBlockingQueue<AnalyticJob>();
           logger.info("executor num is " + _executorNum);
           if (_executorNum > 0) {
-            _service = Executors.newFixedThreadPool(_executorNum);
+            _service = Executors.newFixedThreadPool(_executorNum,
+                    new ThreadFactoryBuilder().setNameFormat("dr-el-executor-thread-%d").build());
             for (int i = 0; i < _executorNum; i++) {
-              _service.submit(new ExecutorThread(i + 1, _jobQueue));
+              _service.submit(new ExecutorThread(_jobQueue));
             }
           }
 
@@ -157,11 +155,9 @@ public class ElephantRunner implements Runnable {
 
   private class ExecutorThread implements Runnable {
 
-    private int _threadId;
     private BlockingQueue<AnalyticJob> _jobQueue;
 
-    ExecutorThread(int threadNum, BlockingQueue<AnalyticJob> jobQueue) {
-      this._threadId = threadNum;
+    ExecutorThread(BlockingQueue<AnalyticJob> jobQueue) {
       this._jobQueue = jobQueue;
     }
 
@@ -171,10 +167,12 @@ public class ElephantRunner implements Runnable {
         AnalyticJob analyticJob = null;
         try {
           analyticJob = _jobQueue.take();
-          logger.info("Executor thread " + _threadId + " analyzing " + analyticJob.getAppType().getName() + " "
-              + analyticJob.getAppId());
+          String analysisName = String.format("%s %s", analyticJob.getAppType().getName(), analyticJob.getAppId());
+          long analysisStartTimeMillis = System.currentTimeMillis();
+          logger.info(String.format("Analyzing %s", analysisName));
           AppResult result = analyticJob.getAnalysis();
           result.save();
+          logger.info(String.format("Analysis of %s took %sms", analysisName, System.currentTimeMillis() - analysisStartTimeMillis));
 
         } catch (InterruptedException ex) {
           Thread.currentThread().interrupt();
@@ -193,7 +191,7 @@ public class ElephantRunner implements Runnable {
           }
         }
       }
-      logger.info("Executor Thread" + _threadId + " is terminated.");
+      logger.info("Executor thread terminated.");
     }
   }
 
