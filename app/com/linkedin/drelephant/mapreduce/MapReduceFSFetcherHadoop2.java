@@ -28,23 +28,35 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.RemoteIterator;
-import org.apache.hadoop.mapreduce.*;
+import org.apache.hadoop.mapreduce.Counter;
+import org.apache.hadoop.mapreduce.CounterGroup;
+import org.apache.hadoop.mapreduce.Counters;
+import org.apache.hadoop.mapreduce.TaskAttemptID;
+import org.apache.hadoop.mapreduce.TaskID;
+import org.apache.hadoop.mapreduce.TaskType;
 import org.apache.hadoop.mapreduce.jobhistory.JobHistoryParser;
 import org.apache.log4j.Logger;
 
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
 
 /**
  * This class implements the Fetcher for MapReduce Applications on Hadoop2
- * Instead of fetching data from job history server, it retrieves history logs and job configs from HDFS directly.
- * Each job contains a event log file with extension ".jhist" and a job configuration in xml format.
+ * Instead of fetching data from job history server, it retrieves history logs and job configs from
+ * HDFS directly. Each job's data consists of a JSON event log file with extension ".jhist" and an
+ * XML job configuration file.
  */
 public class MapReduceFSFetcherHadoop2 implements ElephantFetcher<MapReduceApplicationData> {
   private static final Logger logger = Logger.getLogger(MapReduceFSFetcherHadoop2.class);
   private static final int MAX_SAMPLE_SIZE = 200;
+  private static final String SAMPLING_ENABLED = "sampling_enabled";
 
   private static final String TIMESTAMP_DIR_FORMAT = "%04d" + File.separator + "%02d" + File.separator + "%02d";
   public static final int SERIAL_NUMBER_DIRECTORY_DIGITS = 6;
@@ -119,8 +131,8 @@ public class MapReduceFSFetcherHadoop2 implements ElephantFetcher<MapReduceAppli
       }
     }
 
-    // If some files is missing, search in the intermediate-done-dir in case that HistoryServer has not
-    // move them into the done-dir.
+    // If some files are missing, search in the intermediate-done-dir in case the HistoryServer has
+    // not yet moved them into the done-dir.
     String intermediateDirPath = _intermediateHistoryLocation + File.separator + job.getUser() + File.separator;
     if (jobConfPath == null) {
       jobConfPath = intermediateDirPath + jobId + "_conf.xml";
@@ -159,63 +171,71 @@ public class MapReduceFSFetcherHadoop2 implements ElephantFetcher<MapReduceAppli
     String confFile = files.getJobConfPath();
     String histFile = files.getJobHistPath();
     String appId = job.getAppId();
+
     String jobId = Utils.getJobIdFromApplicationId(appId);
-
-    JobHistoryParser parser = new JobHistoryParser(_fs, histFile);
-    JobHistoryParser.JobInfo jobInfo = parser.parse();
-    IOException parseException = parser.getParseException();
-    if (parseException != null) {
-      throw new RuntimeException("Could not parse history file " + histFile, parseException);
-    }
-
     MapReduceApplicationData jobData = new MapReduceApplicationData();
     jobData.setAppId(appId).setJobId(jobId);
 
-    // Fetch job config
-    Configuration jobConf = new Configuration(false);
-    jobConf.addResource(_fs.open(new Path(confFile)), confFile);
-    Properties jobConfProperties = new Properties();
-    for (Map.Entry<String, String> entry : jobConf) {
-      jobConfProperties.put(entry.getKey(), entry.getValue());
-    }
-    jobData.setJobConf(jobConfProperties);
+    try {
+      JobHistoryParser parser = new JobHistoryParser(_fs, histFile);
+      JobHistoryParser.JobInfo jobInfo = parser.parse();
+      IOException parseException = parser.getParseException();
+      if (parseException != null) {
+        throw new RuntimeException("Could not parse history file " + histFile, parseException);
+      }
 
-    String state = jobInfo.getJobStatus();
-    if (state.equals("SUCCEEDED")) {
+      // Fetch job config
+      Configuration jobConf = new Configuration(false);
+      jobConf.addResource(_fs.open(new Path(confFile)), confFile);
+      Properties jobConfProperties = new Properties();
+      for (Map.Entry<String, String> entry : jobConf) {
+        jobConfProperties.put(entry.getKey(), entry.getValue());
+      }
+      jobData.setJobConf(jobConfProperties);
 
-      jobData.setSucceeded(true);
+      jobData.setSubmitTime(jobInfo.getSubmitTime());
+      jobData.setStartTime(jobInfo.getLaunchTime());
+      jobData.setFinishTime(jobInfo.getFinishTime());
 
-      // Fetch job counter
-      MapReduceCounterData jobCounter = getCounterData(jobInfo.getTotalCounters());
+      String state = jobInfo.getJobStatus();
+      if (state.equals("SUCCEEDED")) {
 
-      // Fetch task data
-      Map<TaskID, JobHistoryParser.TaskInfo> allTasks = jobInfo.getAllTasks();
-      List<JobHistoryParser.TaskInfo> mapperInfoList = new ArrayList<JobHistoryParser.TaskInfo>();
-      List<JobHistoryParser.TaskInfo> reducerInfoList = new ArrayList<JobHistoryParser.TaskInfo>();
-      for (JobHistoryParser.TaskInfo taskInfo : allTasks.values()) {
-        if (taskInfo.getTaskType() == TaskType.MAP) {
-          mapperInfoList.add(taskInfo);
-        } else {
-          reducerInfoList.add(taskInfo);
+        jobData.setSucceeded(true);
+
+        // Fetch job counter
+        MapReduceCounterData jobCounter = getCounterData(jobInfo.getTotalCounters());
+
+        // Fetch task data
+        Map<TaskID, JobHistoryParser.TaskInfo> allTasks = jobInfo.getAllTasks();
+        List<JobHistoryParser.TaskInfo> mapperInfoList = new ArrayList<JobHistoryParser.TaskInfo>();
+        List<JobHistoryParser.TaskInfo> reducerInfoList = new ArrayList<JobHistoryParser.TaskInfo>();
+        for (JobHistoryParser.TaskInfo taskInfo : allTasks.values()) {
+          if (taskInfo.getTaskType() == TaskType.MAP) {
+            mapperInfoList.add(taskInfo);
+          } else {
+            reducerInfoList.add(taskInfo);
+          }
         }
-      }
-      if (jobInfo.getTotalMaps() > MAX_SAMPLE_SIZE) {
-        logger.debug(jobId + " total mappers: " + mapperInfoList.size());
-      }
-      if (jobInfo.getTotalReduces() > MAX_SAMPLE_SIZE) {
-        logger.debug(jobId + " total reducers: " + reducerInfoList.size());
-      }
-      MapReduceTaskData[] mapperList = getTaskData(jobId, mapperInfoList);
-      MapReduceTaskData[] reducerList = getTaskData(jobId, reducerInfoList);
+        if (jobInfo.getTotalMaps() > MAX_SAMPLE_SIZE) {
+          logger.debug(jobId + " total mappers: " + mapperInfoList.size());
+        }
+        if (jobInfo.getTotalReduces() > MAX_SAMPLE_SIZE) {
+          logger.debug(jobId + " total reducers: " + reducerInfoList.size());
+        }
+        MapReduceTaskData[] mapperList = getTaskData(jobId, mapperInfoList);
+        MapReduceTaskData[] reducerList = getTaskData(jobId, reducerInfoList);
 
-      jobData.setCounters(jobCounter).setMapperData(mapperList).setReducerData(reducerList);
-    } else if (state.equals("FAILED")) {
+        jobData.setCounters(jobCounter).setMapperData(mapperList).setReducerData(reducerList);
+      } else if (state.equals("FAILED")) {
 
-      jobData.setSucceeded(false);
-      jobData.setDiagnosticInfo(jobInfo.getErrorInfo());
-    } else {
-      // Should not reach here
-      throw new RuntimeException("Job state not supported. Should be either SUCCEEDED or FAILED");
+        jobData.setSucceeded(false);
+        jobData.setDiagnosticInfo(jobInfo.getErrorInfo());
+      } else {
+        // Should not reach here
+        throw new RuntimeException("Job state not supported. Should be either SUCCEEDED or FAILED");
+      }
+    } catch(Exception e) {
+      logger.error(String.format("Caught exception while fetching job info: %s", e));
     }
 
     return jobData;
@@ -239,22 +259,26 @@ public class MapReduceFSFetcherHadoop2 implements ElephantFetcher<MapReduceAppli
 
     long[] time;
     if (isMapper) {
-      time = new long[]{finishTime - startTime, 0, 0};
+      time = new long[]{finishTime - startTime, 0, 0, startTime, finishTime};
     } else {
       long shuffleFinishTime = attempInfo.getShuffleFinishTime();
       long mergeFinishTime = attempInfo.getSortFinishTime();
-      time = new long[]{finishTime - startTime, shuffleFinishTime - startTime, mergeFinishTime - shuffleFinishTime};
+      time = new long[]{finishTime - startTime, shuffleFinishTime - startTime, mergeFinishTime - shuffleFinishTime, startTime, finishTime};
     }
     return time;
   }
 
   private MapReduceTaskData[] getTaskData(String jobId, List<JobHistoryParser.TaskInfo> infoList) {
-    if (infoList.size() > MAX_SAMPLE_SIZE) {
-      logger.info(jobId + " needs sampling.");
-      Collections.shuffle(infoList);
-    }
+    int sampleSize = infoList.size();
 
-    int sampleSize = Math.min(infoList.size(), MAX_SAMPLE_SIZE);
+    // check if sampling is enabled
+    if(Boolean.parseBoolean(_fetcherConfigurationData.getParamMap().get(SAMPLING_ENABLED))) {
+      if (infoList.size() > MAX_SAMPLE_SIZE) {
+        logger.info(jobId + " needs sampling.");
+        Collections.shuffle(infoList);
+      }
+      sampleSize = Math.min(infoList.size(), MAX_SAMPLE_SIZE);
+    }
 
     MapReduceTaskData[] taskList = new MapReduceTaskData[sampleSize];
     for (int i = 0; i < sampleSize; i++) {
