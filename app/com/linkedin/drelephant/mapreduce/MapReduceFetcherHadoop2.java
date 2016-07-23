@@ -17,7 +17,6 @@
 package com.linkedin.drelephant.mapreduce;
 
 import com.linkedin.drelephant.analysis.AnalyticJob;
-import com.linkedin.drelephant.analysis.ElephantFetcher;
 import com.linkedin.drelephant.mapreduce.data.MapReduceApplicationData;
 import com.linkedin.drelephant.mapreduce.data.MapReduceCounterData;
 import com.linkedin.drelephant.mapreduce.data.MapReduceTaskData;
@@ -31,7 +30,6 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLConnection;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
 import java.util.Random;
@@ -50,16 +48,13 @@ import org.codehaus.jackson.map.ObjectMapper;
 /**
  * This class implements the Fetcher for MapReduce Applications on Hadoop2
  */
-public class MapReduceFetcherHadoop2 implements ElephantFetcher<MapReduceApplicationData> {
-  private static final Logger logger = Logger.getLogger(ElephantFetcher.class);
-  private static final int MAX_SAMPLE_SIZE = 200;
-  private static final String SAMPLING_ENABLED = "sampling_enabled";
+public class MapReduceFetcherHadoop2 extends MapReduceFetcher {
+  private static final Logger logger = Logger.getLogger(MapReduceFetcherHadoop2.class);
   // We provide one minute job fetch delay due to the job sending lag from AM/NM to JobHistoryServer HDFS
 
   private URLFactory _urlFactory;
   private JSONFactory _jsonFactory;
   private String _jhistoryWebAddr;
-  private FetcherConfigurationData _fetcherConfigurationData;
 
   public MapReduceFetcherHadoop2(FetcherConfigurationData fetcherConfData) throws IOException {
     this._fetcherConfigurationData = fetcherConfData;
@@ -329,17 +324,7 @@ public class MapReduceFetcherHadoop2 implements ElephantFetcher<MapReduceApplica
 
     private void getTaskData(String jobId, List<MapReduceTaskData> taskList) throws IOException, AuthenticationException {
 
-      int sampleSize = taskList.size();
-
-      // check if sampling is enabled
-      if(Boolean.parseBoolean(_fetcherConfigurationData.getParamMap().get(SAMPLING_ENABLED))) {
-        if (taskList.size() > MAX_SAMPLE_SIZE) {
-          logger.info(jobId + " needs sampling.");
-          Collections.shuffle(taskList);
-        }
-        sampleSize = Math.min(taskList.size(), MAX_SAMPLE_SIZE);
-      }
-
+      int sampleSize = sampleAndGetSize(jobId, taskList);
 
       for(int i=0; i < sampleSize; i++) {
         MapReduceTaskData data = taskList.get(i);

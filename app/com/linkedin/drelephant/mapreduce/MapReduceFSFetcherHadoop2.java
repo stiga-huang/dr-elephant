@@ -17,7 +17,6 @@
 package com.linkedin.drelephant.mapreduce;
 
 import com.linkedin.drelephant.analysis.AnalyticJob;
-import com.linkedin.drelephant.analysis.ElephantFetcher;
 import com.linkedin.drelephant.configurations.fetcher.FetcherConfigurationData;
 import com.linkedin.drelephant.mapreduce.data.MapReduceApplicationData;
 import com.linkedin.drelephant.mapreduce.data.MapReduceCounterData;
@@ -28,28 +27,36 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.RemoteIterator;
-import org.apache.hadoop.mapreduce.*;
+import org.apache.hadoop.mapreduce.Counter;
+import org.apache.hadoop.mapreduce.CounterGroup;
+import org.apache.hadoop.mapreduce.Counters;
+import org.apache.hadoop.mapreduce.TaskAttemptID;
+import org.apache.hadoop.mapreduce.TaskID;
+import org.apache.hadoop.mapreduce.TaskType;
 import org.apache.hadoop.mapreduce.jobhistory.JobHistoryParser;
 import org.apache.log4j.Logger;
 
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
 
 /**
  * This class implements the Fetcher for MapReduce Applications on Hadoop2
- * Instead of fetching data from job history server, it retrieves history logs and job configs from HDFS directly.
- * Each job contains a event log file with extension ".jhist" and a job configuration in xml format.
+ * Instead of fetching data from job history server, it retrieves history logs and job configs from
+ * HDFS directly. Each job's data consists of a JSON event log file with extension ".jhist" and an
+ * XML job configuration file.
  */
-public class MapReduceFSFetcherHadoop2 implements ElephantFetcher<MapReduceApplicationData> {
+public class MapReduceFSFetcherHadoop2 extends MapReduceFetcher {
   private static final Logger logger = Logger.getLogger(MapReduceFSFetcherHadoop2.class);
-  private static final int MAX_SAMPLE_SIZE = 200;
 
   private static final String TIMESTAMP_DIR_FORMAT = "%04d" + File.separator + "%02d" + File.separator + "%02d";
-  public static final int SERIAL_NUMBER_DIRECTORY_DIGITS = 6;
+  private static final int SERIAL_NUMBER_DIRECTORY_DIGITS = 6;
 
-  private FetcherConfigurationData _fetcherConfigurationData;
   private FileSystem _fs;
   private String _historyLocation;
   private String _intermediateHistoryLocation;
@@ -66,7 +73,7 @@ public class MapReduceFSFetcherHadoop2 implements ElephantFetcher<MapReduceAppli
   }
 
   /**
-   * The location of a job history file is in format: {done_dir}/yyyy/mm/dd/{serialPart}.
+   * The location of a job history file is in format: {done-dir}/yyyy/mm/dd/{serialPart}.
    * yyyy/mm/dd is the year, month and date of the finish time.
    * serialPart is the first 6 digits of the serial number considering it as a 9 digits number.
    * PS: The serial number is the last part of an app id.
@@ -74,7 +81,12 @@ public class MapReduceFSFetcherHadoop2 implements ElephantFetcher<MapReduceAppli
    * For example, if appId = application_1461566847127_84624, then serial number is 84624.
    * Consider it as a 9 digits number, serial number is 000084624. So the corresponding
    * serialPart is 000084. If this application finish at 2016-5-30, its history file will locate
-   * at {done_dir}/2016/05/30/000084
+   * at {done-dir}/2016/05/30/000084
+   * </p>
+   * <p>
+   * Furthermore, this location format is only satisfied for finished jobs in {done-dir} and not
+   * for running jobs in {intermediate-done-dir}.
+   * </p>
    */
   private String getHistoryDir(AnalyticJob job) {
     // generate the date part
@@ -101,13 +113,7 @@ public class MapReduceFSFetcherHadoop2 implements ElephantFetcher<MapReduceAppli
 
     // Search files in done dir
     String jobHistoryDirPath = getHistoryDir(job);
-    RemoteIterator<LocatedFileStatus> it;
-    try {
-      it = _fs.listFiles(new Path(jobHistoryDirPath), false);
-    } catch (FileNotFoundException e) {
-      logger.error("Can't find job info of " + jobId + ": directory " + jobHistoryDirPath + " not found");
-      return null;
-    }
+    RemoteIterator<LocatedFileStatus> it = _fs.listFiles(new Path(jobHistoryDirPath), false);
     while (it.hasNext() && (jobConfPath == null || jobHistPath == null)) {
       String name = it.next().getPath().getName();
       if (name.contains(jobId)) {
@@ -119,8 +125,8 @@ public class MapReduceFSFetcherHadoop2 implements ElephantFetcher<MapReduceAppli
       }
     }
 
-    // If some files is missing, search in the intermediate-done-dir in case that HistoryServer has not
-    // move them into the done-dir.
+    // If some files are missing, search in the intermediate-done-dir in case the HistoryServer has
+    // not yet moved them into the done-dir.
     String intermediateDirPath = _intermediateHistoryLocation + File.separator + job.getUser() + File.separator;
     if (jobConfPath == null) {
       jobConfPath = intermediateDirPath + jobId + "_conf.xml";
@@ -239,22 +245,18 @@ public class MapReduceFSFetcherHadoop2 implements ElephantFetcher<MapReduceAppli
 
     long[] time;
     if (isMapper) {
-      time = new long[]{finishTime - startTime, 0, 0};
+      time = new long[]{finishTime - startTime, 0, 0, startTime, finishTime};
     } else {
       long shuffleFinishTime = attempInfo.getShuffleFinishTime();
       long mergeFinishTime = attempInfo.getSortFinishTime();
-      time = new long[]{finishTime - startTime, shuffleFinishTime - startTime, mergeFinishTime - shuffleFinishTime};
+      time = new long[]{finishTime - startTime, shuffleFinishTime - startTime,
+              mergeFinishTime - shuffleFinishTime, startTime, finishTime};
     }
     return time;
   }
 
   private MapReduceTaskData[] getTaskData(String jobId, List<JobHistoryParser.TaskInfo> infoList) {
-    if (infoList.size() > MAX_SAMPLE_SIZE) {
-      logger.info(jobId + " needs sampling.");
-      Collections.shuffle(infoList);
-    }
-
-    int sampleSize = Math.min(infoList.size(), MAX_SAMPLE_SIZE);
+    int sampleSize = sampleAndGetSize(jobId, infoList);
 
     MapReduceTaskData[] taskList = new MapReduceTaskData[sampleSize];
     for (int i = 0; i < sampleSize; i++) {
