@@ -26,21 +26,25 @@ import java.util.List;
 
 
 public abstract class MapReduceFetcher implements ElephantFetcher<MapReduceApplicationData> {
-    private static final Logger logger = Logger.getLogger(MapReduceFetcher.class);
-    protected static final int MAX_SAMPLE_SIZE = 200;
-    protected static final String SAMPLING_ENABLED = "sampling_enabled";
+  private static final Logger logger = Logger.getLogger(MapReduceFetcher.class);
+  protected static final int MAX_SAMPLE_SIZE = 200;
+  protected static final String SAMPLING_ENABLED_XML_FIELD = "sampling_enabled";
 
-    protected FetcherConfigurationData _fetcherConfigurationData;
+  protected FetcherConfigurationData _fetcherConfigurationData;
 
-    protected int sampleAndGetSize(String jobId, List<?> taskList) {
-        // check if sampling is enabled
-        if (Boolean.parseBoolean(_fetcherConfigurationData.getParamMap().get(SAMPLING_ENABLED))) {
-            if (taskList.size() > MAX_SAMPLE_SIZE) {
-                logger.info(jobId + " needs sampling.");
-                Collections.shuffle(taskList);
-            }
-            return Math.min(taskList.size(), MAX_SAMPLE_SIZE);
-        }
-        return taskList.size();
+  public MapReduceFetcher(FetcherConfigurationData fetcherConfData) {
+    this._fetcherConfigurationData = fetcherConfData;
+  }
+
+  protected int sampleAndGetSize(String jobId, List<?> taskList) {
+    // check if sampling is enabled
+    if (Boolean.parseBoolean(_fetcherConfigurationData.getParamMap().get(SAMPLING_ENABLED_XML_FIELD))) {
+      if (taskList.size() > MAX_SAMPLE_SIZE) {
+        logger.info(jobId + " needs sampling.");
+        Collections.shuffle(taskList);
+      }
+      return Math.min(taskList.size(), MAX_SAMPLE_SIZE);
     }
+    return taskList.size();
+  }
 }

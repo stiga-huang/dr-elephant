@@ -57,7 +57,7 @@ public class MapReduceFetcherHadoop2 extends MapReduceFetcher {
   private String _jhistoryWebAddr;
 
   public MapReduceFetcherHadoop2(FetcherConfigurationData fetcherConfData) throws IOException {
-    this._fetcherConfigurationData = fetcherConfData;
+    super(fetcherConfData);
 
     final String jhistoryAddr = new Configuration().get("mapreduce.jobhistory.webapp.address");
 

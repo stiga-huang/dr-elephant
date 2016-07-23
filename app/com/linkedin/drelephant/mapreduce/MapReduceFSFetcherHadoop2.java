@@ -22,6 +22,7 @@ import com.linkedin.drelephant.mapreduce.data.MapReduceApplicationData;
 import com.linkedin.drelephant.mapreduce.data.MapReduceCounterData;
 import com.linkedin.drelephant.mapreduce.data.MapReduceTaskData;
 import com.linkedin.drelephant.util.Utils;
+import org.apache.commons.io.FileUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocatedFileStatus;
@@ -54,15 +55,27 @@ import java.util.Properties;
 public class MapReduceFSFetcherHadoop2 extends MapReduceFetcher {
   private static final Logger logger = Logger.getLogger(MapReduceFSFetcherHadoop2.class);
 
+  private static final String LOG_SIZE_XML_FIELD = "history_log_size_limit_in_mb";
   private static final String TIMESTAMP_DIR_FORMAT = "%04d" + File.separator + "%02d" + File.separator + "%02d";
   private static final int SERIAL_NUMBER_DIRECTORY_DIGITS = 6;
+  private static final double DEFALUT_MAX_LOG_SIZE_IN_MB = 100;
 
   private FileSystem _fs;
   private String _historyLocation;
   private String _intermediateHistoryLocation;
+  private double _maxLogSizeInMB;
 
   public MapReduceFSFetcherHadoop2(FetcherConfigurationData fetcherConfData) throws IOException {
-    this._fetcherConfigurationData = fetcherConfData;
+    super(fetcherConfData);
+
+    _maxLogSizeInMB = DEFALUT_MAX_LOG_SIZE_IN_MB;
+    if (fetcherConfData.getParamMap().get(LOG_SIZE_XML_FIELD) != null) {
+      double[] logLimitSize = Utils.getParam(fetcherConfData.getParamMap().get(LOG_SIZE_XML_FIELD), 1);
+      if (logLimitSize != null) {
+        _maxLogSizeInMB = logLimitSize[0];
+      }
+    }
+    logger.info("The history log limit of MapReduce application is set to " + _maxLogSizeInMB + " MB");
 
     Configuration conf = new Configuration();
     this._fs = FileSystem.get(conf);
@@ -167,13 +180,6 @@ public class MapReduceFSFetcherHadoop2 extends MapReduceFetcher {
     String appId = job.getAppId();
     String jobId = Utils.getJobIdFromApplicationId(appId);
 
-    JobHistoryParser parser = new JobHistoryParser(_fs, histFile);
-    JobHistoryParser.JobInfo jobInfo = parser.parse();
-    IOException parseException = parser.getParseException();
-    if (parseException != null) {
-      throw new RuntimeException("Could not parse history file " + histFile, parseException);
-    }
-
     MapReduceApplicationData jobData = new MapReduceApplicationData();
     jobData.setAppId(appId).setJobId(jobId);
 
@@ -186,6 +192,21 @@ public class MapReduceFSFetcherHadoop2 extends MapReduceFetcher {
     }
     jobData.setJobConf(jobConfProperties);
 
+    if (_fs.getFileStatus(new Path(histFile)).getLen() > _maxLogSizeInMB * FileUtils.ONE_MB) {
+      String errMsg = "The history log of MapReduce application: " + appId + " is over the limit size of "
+              + _maxLogSizeInMB + " MB, the parsing process gets throttled.";
+      logger.warn(errMsg);
+      jobData.setDiagnosticInfo(errMsg);
+      jobData.setSucceeded(false);  // set succeeded to false to avoid heuristic analysis
+      return jobData;
+    }
+
+    JobHistoryParser parser = new JobHistoryParser(_fs, histFile);
+    JobHistoryParser.JobInfo jobInfo = parser.parse();
+    IOException parseException = parser.getParseException();
+    if (parseException != null) {
+      throw new RuntimeException("Could not parse history file " + histFile, parseException);
+    }
     String state = jobInfo.getJobStatus();
     if (state.equals("SUCCEEDED")) {
 
