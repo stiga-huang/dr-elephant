@@ -192,6 +192,7 @@ public class MapReduceFSFetcherHadoop2 extends MapReduceFetcher {
     }
     jobData.setJobConf(jobConfProperties);
 
+    // Check if job history file is too large and should be throttled
     if (_fs.getFileStatus(new Path(histFile)).getLen() > _maxLogSizeInMB * FileUtils.ONE_MB) {
       String errMsg = "The history log of MapReduce application: " + appId + " is over the limit size of "
               + _maxLogSizeInMB + " MB, the parsing process gets throttled.";
@@ -201,12 +202,18 @@ public class MapReduceFSFetcherHadoop2 extends MapReduceFetcher {
       return jobData;
     }
 
+    // Analyze job history file
     JobHistoryParser parser = new JobHistoryParser(_fs, histFile);
     JobHistoryParser.JobInfo jobInfo = parser.parse();
     IOException parseException = parser.getParseException();
     if (parseException != null) {
       throw new RuntimeException("Could not parse history file " + histFile, parseException);
     }
+
+    jobData.setSubmitTime(jobInfo.getSubmitTime());
+    jobData.setStartTime(jobInfo.getLaunchTime());
+    jobData.setFinishTime(jobInfo.getFinishTime());
+
     String state = jobInfo.getJobStatus();
     if (state.equals("SUCCEEDED")) {
 
