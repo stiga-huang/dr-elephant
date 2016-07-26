@@ -14,7 +14,7 @@
  * the License.
  */
 
-package com.linkedin.drelephant.mapreduce;
+package com.linkedin.drelephant.mapreduce.fetchers;
 
 import org.junit.Assert;
 import org.junit.Test;

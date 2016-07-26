@@ -14,7 +14,7 @@
  * the License.
  */
 
-package com.linkedin.drelephant.mapreduce;
+package com.linkedin.drelephant.mapreduce.fetchers;
 
 import com.linkedin.drelephant.analysis.AnalyticJob;
 import com.linkedin.drelephant.configurations.fetcher.FetcherConfigurationData;
@@ -58,7 +58,7 @@ public class MapReduceFSFetcherHadoop2 extends MapReduceFetcher {
   private static final String LOG_SIZE_XML_FIELD = "history_log_size_limit_in_mb";
   private static final String TIMESTAMP_DIR_FORMAT = "%04d" + File.separator + "%02d" + File.separator + "%02d";
   private static final int SERIAL_NUMBER_DIRECTORY_DIGITS = 6;
-  private static final double DEFALUT_MAX_LOG_SIZE_IN_MB = 100;
+  private static final double DEFALUT_MAX_LOG_SIZE_IN_MB = 500;
 
   private FileSystem _fs;
   private String _historyLocation;

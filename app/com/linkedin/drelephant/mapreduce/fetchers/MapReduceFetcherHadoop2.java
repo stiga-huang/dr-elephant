@@ -14,7 +14,7 @@
  * the License.
  */
 
-package com.linkedin.drelephant.mapreduce;
+package com.linkedin.drelephant.mapreduce.fetchers;
 
 import com.linkedin.drelephant.analysis.AnalyticJob;
 import com.linkedin.drelephant.mapreduce.data.MapReduceApplicationData;

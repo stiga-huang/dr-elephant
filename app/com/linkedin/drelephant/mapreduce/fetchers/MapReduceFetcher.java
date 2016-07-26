@@ -14,7 +14,7 @@
  * the License.
  */
 
-package com.linkedin.drelephant.mapreduce;
+package com.linkedin.drelephant.mapreduce.fetchers;
 
 import com.linkedin.drelephant.analysis.ElephantFetcher;
 import com.linkedin.drelephant.configurations.fetcher.FetcherConfigurationData;
@@ -31,14 +31,17 @@ public abstract class MapReduceFetcher implements ElephantFetcher<MapReduceAppli
   protected static final String SAMPLING_ENABLED_XML_FIELD = "sampling_enabled";
 
   protected FetcherConfigurationData _fetcherConfigurationData;
+  private boolean samplingEnabled;
 
   public MapReduceFetcher(FetcherConfigurationData fetcherConfData) {
     this._fetcherConfigurationData = fetcherConfData;
+    this.samplingEnabled = Boolean.parseBoolean(
+            fetcherConfData.getParamMap().get(SAMPLING_ENABLED_XML_FIELD));
   }
 
   protected int sampleAndGetSize(String jobId, List<?> taskList) {
     // check if sampling is enabled
-    if (Boolean.parseBoolean(_fetcherConfigurationData.getParamMap().get(SAMPLING_ENABLED_XML_FIELD))) {
+    if (samplingEnabled) {
       if (taskList.size() > MAX_SAMPLE_SIZE) {
         logger.info(jobId + " needs sampling.");
         Collections.shuffle(taskList);
