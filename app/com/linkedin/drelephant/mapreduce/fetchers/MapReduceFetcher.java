@@ -31,17 +31,17 @@ public abstract class MapReduceFetcher implements ElephantFetcher<MapReduceAppli
   protected static final String SAMPLING_ENABLED_XML_FIELD = "sampling_enabled";
 
   protected FetcherConfigurationData _fetcherConfigurationData;
-  private boolean samplingEnabled;
+  private boolean _samplingEnabled;
 
   public MapReduceFetcher(FetcherConfigurationData fetcherConfData) {
     this._fetcherConfigurationData = fetcherConfData;
-    this.samplingEnabled = Boolean.parseBoolean(
+    this._samplingEnabled = Boolean.parseBoolean(
             fetcherConfData.getParamMap().get(SAMPLING_ENABLED_XML_FIELD));
   }
 
   protected int sampleAndGetSize(String jobId, List<?> taskList) {
     // check if sampling is enabled
-    if (samplingEnabled) {
+    if (_samplingEnabled) {
       if (taskList.size() > MAX_SAMPLE_SIZE) {
         logger.info(jobId + " needs sampling.");
         Collections.shuffle(taskList);
