@@ -50,4 +50,8 @@ public abstract class MapReduceFetcher implements ElephantFetcher<MapReduceAppli
     }
     return taskList.size();
   }
+
+  public boolean isSamplingEnabled() {
+    return _samplingEnabled;
+  }
 }

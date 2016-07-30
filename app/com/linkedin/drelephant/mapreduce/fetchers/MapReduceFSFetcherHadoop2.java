@@ -23,6 +23,7 @@ import com.linkedin.drelephant.mapreduce.data.MapReduceCounterData;
 import com.linkedin.drelephant.mapreduce.data.MapReduceTaskData;
 import com.linkedin.drelephant.util.Utils;
 import org.apache.commons.io.FileUtils;
+import org.apache.commons.lang.StringUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocatedFileStatus;
@@ -58,7 +59,7 @@ public class MapReduceFSFetcherHadoop2 extends MapReduceFetcher {
   private static final String LOG_SIZE_XML_FIELD = "history_log_size_limit_in_mb";
   private static final String TIMESTAMP_DIR_FORMAT = "%04d" + File.separator + "%02d" + File.separator + "%02d";
   private static final int SERIAL_NUMBER_DIRECTORY_DIGITS = 6;
-  private static final double DEFALUT_MAX_LOG_SIZE_IN_MB = 500;
+  protected static final double DEFALUT_MAX_LOG_SIZE_IN_MB = 500;
 
   private FileSystem _fs;
   private String _historyLocation;
@@ -85,6 +86,14 @@ public class MapReduceFSFetcherHadoop2 extends MapReduceFetcher {
     logger.info("History done dir: " + _historyLocation);
   }
 
+  public String getHistoryLocation() {
+    return _historyLocation;
+  }
+
+  public double getMaxLogSizeInMB() {
+    return _maxLogSizeInMB;
+  }
+
   /**
    * The location of a job history file is in format: {done-dir}/yyyy/mm/dd/{serialPart}.
    * yyyy/mm/dd is the year, month and date of the finish time.
@@ -101,7 +110,7 @@ public class MapReduceFSFetcherHadoop2 extends MapReduceFetcher {
    * for running jobs in {intermediate-done-dir}.
    * </p>
    */
-  private String getHistoryDir(AnalyticJob job) {
+  protected String getHistoryDir(AnalyticJob job) {
     // generate the date part
     Calendar timestamp = Calendar.getInstance();
     timestamp.setTimeInMillis(job.getFinishTime());
@@ -116,7 +125,7 @@ public class MapReduceFSFetcherHadoop2 extends MapReduceFetcher {
     String serialPart = String.format("%09d", serialNumber)
             .substring(0, SERIAL_NUMBER_DIRECTORY_DIGITS);
 
-    return _historyLocation + File.separator + datePart + File.separator + serialPart + File.separator;
+    return StringUtils.join(new String[]{_historyLocation, datePart, serialPart, ""}, File.separator);
   }
 
   private DataFiles getHistoryFiles(AnalyticJob job) throws IOException {
