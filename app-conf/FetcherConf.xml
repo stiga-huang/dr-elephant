@@ -35,6 +35,18 @@
     <params>
       <sampling_enabled>false</sampling_enabled>
     </params>
+    <!--
+      This is an experimental replacement for the MapReduceFetcherHadoop2 that attempts to burn
+      through queues of jobs faster by pulling data directly from HDFS rather than going through the
+      job history server.
+    -->
+    <!--<classname>com.linkedin.drelephant.mapreduce.MapReduceFSFetcherHadoop2</classname>
+    <params>
+      <sampling_enabled>false</sampling_enabled>
+    </params>-->
+    <params>
+      <sampling_enabled>false</sampling_enabled>
+    </params>
   </fetcher>
   <!--
     This is an experimental replacement for the MapReduceFetcherHadoop2 that attempts to burn
