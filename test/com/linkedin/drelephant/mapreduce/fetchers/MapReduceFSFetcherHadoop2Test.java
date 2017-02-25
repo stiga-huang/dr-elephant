@@ -41,6 +41,7 @@ import java.util.Calendar;
 import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
+import java.util.TimeZone;
 
 public class MapReduceFSFetcherHadoop2Test {
 
@@ -77,6 +78,7 @@ public class MapReduceFSFetcherHadoop2Test {
               fetcherConf.getFetchersConfigurationData().get(0));
       Assert.assertFalse("Sampling should be disabled in default", fetcher.isSamplingEnabled());
       Assert.assertEquals(fetcher.DEFALUT_MAX_LOG_SIZE_IN_MB, fetcher.getMaxLogSizeInMB(), 0.0001);
+      Assert.assertEquals(TimeZone.getDefault(), fetcher.getTimeZone());
 
       List<Object> list = new ArrayList<Object>();
       int listLen = fetcher.MAX_SAMPLE_SIZE * 2;
@@ -98,6 +100,7 @@ public class MapReduceFSFetcherHadoop2Test {
               fetcherConf.getFetchersConfigurationData().get(0));
       Assert.assertTrue("Failed to enable sampling", fetcher.isSamplingEnabled());
       Assert.assertEquals(200d, fetcher.getMaxLogSizeInMB(), 0.0001);
+      Assert.assertEquals(TimeZone.getTimeZone("PST"), fetcher.getTimeZone());
 
       List<Object> list = new ArrayList<Object>();
       int listLen = fetcher.MAX_SAMPLE_SIZE * 2;
@@ -119,6 +122,7 @@ public class MapReduceFSFetcherHadoop2Test {
               fetcherConf.getFetchersConfigurationData().get(0));
       Assert.assertFalse("Sampling should be disabled in default", fetcher.isSamplingEnabled());
       Assert.assertEquals(fetcher.DEFALUT_MAX_LOG_SIZE_IN_MB, fetcher.getMaxLogSizeInMB(), 0.0001);
+      Assert.assertEquals(TimeZone.getDefault(), fetcher.getTimeZone());
 
       List<Object> list = new ArrayList<Object>();
       int listLen = fetcher.MAX_SAMPLE_SIZE * 2;

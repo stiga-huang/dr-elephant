@@ -46,6 +46,7 @@ import java.util.Calendar;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.TimeZone;
 
 /**
  * This class implements the Fetcher for MapReduce Applications on Hadoop2
@@ -57,6 +58,7 @@ public class MapReduceFSFetcherHadoop2 extends MapReduceFetcher {
   private static final Logger logger = Logger.getLogger(MapReduceFSFetcherHadoop2.class);
 
   private static final String LOG_SIZE_XML_FIELD = "history_log_size_limit_in_mb";
+  private static final String HISTORY_SERVER_TIME_ZONE_XML_FIELD = "history_server_time_zone";
   private static final String TIMESTAMP_DIR_FORMAT = "%04d" + File.separator + "%02d" + File.separator + "%02d";
   private static final int SERIAL_NUMBER_DIRECTORY_DIGITS = 6;
   protected static final double DEFALUT_MAX_LOG_SIZE_IN_MB = 500;
@@ -65,6 +67,7 @@ public class MapReduceFSFetcherHadoop2 extends MapReduceFetcher {
   private String _historyLocation;
   private String _intermediateHistoryLocation;
   private double _maxLogSizeInMB;
+  private TimeZone _timeZone;
 
   public MapReduceFSFetcherHadoop2(FetcherConfigurationData fetcherConfData) throws IOException {
     super(fetcherConfData);
@@ -77,6 +80,10 @@ public class MapReduceFSFetcherHadoop2 extends MapReduceFetcher {
       }
     }
     logger.info("The history log limit of MapReduce application is set to " + _maxLogSizeInMB + " MB");
+
+    String timeZoneStr = fetcherConfData.getParamMap().get(HISTORY_SERVER_TIME_ZONE_XML_FIELD);
+    _timeZone = timeZoneStr == null ? TimeZone.getDefault() : TimeZone.getTimeZone(timeZoneStr);
+    logger.info("Using timezone: " + _timeZone.getID());
 
     Configuration conf = new Configuration();
     this._fs = FileSystem.get(conf);
@@ -92,6 +99,10 @@ public class MapReduceFSFetcherHadoop2 extends MapReduceFetcher {
 
   public double getMaxLogSizeInMB() {
     return _maxLogSizeInMB;
+  }
+
+  public TimeZone getTimeZone() {
+    return _timeZone;
   }
 
   /**
@@ -112,7 +123,7 @@ public class MapReduceFSFetcherHadoop2 extends MapReduceFetcher {
    */
   protected String getHistoryDir(AnalyticJob job) {
     // generate the date part
-    Calendar timestamp = Calendar.getInstance();
+    Calendar timestamp = Calendar.getInstance(_timeZone);
     timestamp.setTimeInMillis(job.getFinishTime());
     String datePart = String.format(TIMESTAMP_DIR_FORMAT,
             timestamp.get(Calendar.YEAR),
